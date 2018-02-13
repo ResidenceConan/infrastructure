@@ -1,0 +1,2 @@
+jira/jira-secret.nix filter=git-crypt diff=git-crypt
+jira/hsr-host-configuration.nix filter=git-crypt diff=git-crypt
