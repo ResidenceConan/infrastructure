@@ -18,6 +18,7 @@
       };
       services.postgresql = {
         enable = true;
+        package = pkgs.postgresql96;
       };
 
       services.nginx = {
@@ -42,16 +43,14 @@
         };
       };
 
+      users.extraUsers.postgres = { 
+        # make postgres user have real shell to allow sudo -s postgres
+        useDefaultShell = true;
+      };
+
       networking.firewall.allowedTCPPorts = [ 443 80 ];
 
       # backup
-
-      services.postgresqlBackup = {
-        enable = true;
-        databases = [ "jiradb" ];
-        location = "/var/backup/jira/jiradb";
-        period = "15 02 * * *";
-      };
 
       systemd.timers.jira-backup = {
         description = "Backup JIRA Database and data";
@@ -80,17 +79,25 @@
           export AWS_ACCESS_KEY_ID=$(cat /run/keys/aws-access-id)
           export AWS_SECRET_ACCESS_KEY=$(cat /run/keys/aws-secret)
 
-          PGBACKUP=/var/backup/jira/jiradb/jiradb.gz
-
+          PGDB=jiradb
+          PGBACKUPDIR=/var/backup/jira/$PGDB
+          PGBACKUP=$PGBACKUPDIR/$PGDB.gz
           JIRADATA=/var/lib/jira/data
 
           S3BUCKET=ba-jira-backup
 
           mkdir -p $DESTINATION
+          mkdir -p $PGBACKUPDIR
+          chown postgres:postgres $PGBACKUPDIR
           mkdir -p $TMP_DEST
 
           echo "Stopping service $SERVICE"
           systemctl stop $SERVICE
+
+          # backup database
+          ${pkgs.sudo}/bin/sudo -u postgres ${pkgs.bash}/bin/bash<<_
+          ${pkgs.postgresql96}/bin/pg_dump $PGDB | ${pkgs.gzip}/bin/gzip -c > $PGBACKUP
+          _
 
           # backup data
           ${pkgs.rsync}/bin/rsync -av $JIRADATA $TMP_DEST
